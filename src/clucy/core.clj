@@ -1,10 +1,17 @@
 (ns clucy.core
   (:use clojure.contrib.java-utils)
   (:import java.io.File
+	   java.io.StringReader
            org.apache.lucene.document.Document
            (org.apache.lucene.document Field Field$Store Field$Index)
-           (org.apache.lucene.index IndexWriter IndexWriter$MaxFieldLength)
-           org.apache.lucene.analysis.standard.StandardAnalyzer
+           (org.apache.lucene.index IndexWriter IndexWriter$MaxFieldLength
+				    IndexReader)
+           ;;org.apache.lucene.analysis.standard.StandardAnalyzer
+	   org.apache.lucene.analysis.snowball.SnowballAnalyzer
+	   org.apache.lucene.analysis.tokenattributes.TermAttribute
+	   org.apache.lucene.analysis.tokenattributes.TermAttributeImpl
+	   org.apache.lucene.analysis.tokenattributes.TypeAttribute
+	   org.apache.lucene.analysis.tokenattributes.TypeAttributeImpl
            org.apache.lucene.queryParser.QueryParser
            org.apache.lucene.search.IndexSearcher
            (org.apache.lucene.store RAMDirectory NIOFSDirectory)
@@ -16,7 +23,8 @@
            org.apache.lucene.search.TermQuery))
 
 (def *version*  Version/LUCENE_30)
-(def *analyzer* (StandardAnalyzer. *version*))
+;;(def *analyzer* (StandardAnalyzer. *version*))
+(def *analyzer* (SnowballAnalyzer. *version* "English"))
 (def *optimize-frequency* 1)
 
 (defstruct
@@ -48,6 +56,12 @@
   (IndexWriter. (:index @index)
                 *analyzer*
                 IndexWriter$MaxFieldLength/UNLIMITED))
+
+(defn- index-reader
+  "Create an IndexReader."
+  [index]
+  (IndexReader/open (:index @index)))
+
 
 (defn- optimize-index
   "Optimized the provided index if the number of updates matches or
@@ -171,3 +185,38 @@ of the results."
         (.deleteDocuments writer query)
         (swap! index assoc :updates (inc (:updates @index)))))
     (optimize-index index)))
+
+
+(defn retrieve
+  "Retrievs from index document by it's Lucene number.
+   Don't forget, that after optimize-index numbers in index may change."
+  [index n]
+  (with-open [reader (index-reader index)]
+    (document->map (.document reader n))))
+
+;; utils ;;
+
+(defn analyze
+  "Breaks text into list of terms using specified anayzer"
+  ([text] (analyze text *analyzer*))
+  ([text analyzer]
+     (let [reader (java.io.StringReader. text)
+	   tokens (.tokenStream analyzer nil reader)
+	   term-attr (.getAttribute tokens TermAttribute)]
+       (loop [ret (transient [])]
+	 (if (not (.incrementToken tokens))
+	   (persistent! ret)
+	   (recur (conj! ret (.term term-attr))))))))
+
+(defn count-per-doc
+  "Returns map where keys are numbers of (not deleted) documents
+   and values are counts of term occurrences in this doc."
+  ([index word] (count-per-doc index word :_content))
+  ([index word field]
+     (with-open [reader (index-reader index)]
+       (let [term (Term. (as-str field) word)
+	     term-docs (.termDocs reader term)]
+	 (loop [ret (transient {})]
+	   (if (not (.next term-docs))
+	     (persistent! ret)
+	     (recur (assoc! ret (.doc term-docs) (.freq term-docs)))))))))
