@@ -6,6 +6,7 @@
            (org.apache.lucene.document Field Field$Store Field$Index)
            (org.apache.lucene.index IndexWriter IndexWriter$MaxFieldLength
 				    IndexReader)
+	   org.apache.tika.language.LanguageIdentifier
            ;;org.apache.lucene.analysis.standard.StandardAnalyzer
 	   org.apache.lucene.analysis.snowball.SnowballAnalyzer
 	   org.apache.lucene.analysis.tokenattributes.TermAttribute
@@ -220,3 +221,40 @@ of the results."
 	   (if (not (.next term-docs))
 	     (persistent! ret)
 	     (recur (assoc! ret (.doc term-docs) (.freq term-docs)))))))))
+
+(defn all-doc-numbers
+  "Returns list of numbers of all (not deleted) documents."
+  [index]
+  (with-open [reader (index-reader index)]
+    (let [num-docs (.numDocs reader)]
+      (loop [i num-docs, ret (list)]
+	(if (= i 0)
+	  ret
+	  (if (.isDeleted reader i)
+	    (recur (- i 1) ret)
+	    (recur (- i 1) (conj ret i))))))))
+
+(defn all-words
+  "Returns list of all words."
+  [index]
+  (with-open [reader (index-reader index)]
+    (let [terms (.terms reader)]
+      (loop [ret (transient #{})]
+	(if (.next terms)
+	  (recur (conj! ret (.text (.term terms))))
+	  (seq (persistent! ret)))))))
+
+(defn detect-lang
+  "Tries to guess the language the text is written in.
+   Result - 2-character language code (e.g. 'en', 'fr', etc.)"
+  [text]
+  (let [idf (LanguageIdentifier. text)]
+    (.getLanguage idf)))
+
+;; test data ;;
+
+(defn init-tests []
+  (def idx (memory-index))
+  (add idx {:title "William Shakespeare: Dream in a Summer Night"})
+  (add idx {:title "Progmatic bookshelf: Programming Clojure"})
+  (add idx {:title "Science of a Dream"}))
