@@ -25,12 +25,13 @@
 
 (def *version*  Version/LUCENE_30)
 ;;(def *analyzer* (StandardAnalyzer. *version*))
-(def *analyzer* (SnowballAnalyzer. *version* "English"))
+(defn snowball-analyzer [lang] (SnowballAnalyzer. *version* lang))
+(def *analyzer* (snowball-analyzer "English"))
 (def *optimize-frequency* 1)
 
 (defstruct
     #^{:doc "Structure for clucy indexes."}
-    clucy-index :index :optimize-frequency :updates)
+  clucy-index :index :optimize-frequency :updates)
 
 ;; flag to indicate a default "_content" field should be maintained
 (def *content* true)
@@ -53,10 +54,11 @@
 
 (defn- index-writer
   "Create an IndexWriter."
-  [index]
+  ([index] (index-writer index *analyzer*))
+  ([index analyzer]
   (IndexWriter. (:index @index)
-                *analyzer*
-                IndexWriter$MaxFieldLength/UNLIMITED))
+                analyzer
+                IndexWriter$MaxFieldLength/UNLIMITED)))
 
 (defn- index-reader
   "Create an IndexReader."
@@ -118,8 +120,8 @@
 
 (defn add
   "Add hash-maps to the search index."
-  [index & maps]
-  (with-open [writer (index-writer index)]
+  [index analyzer & maps]
+  (with-open [writer (index-writer index analyzer)]
     (doseq [m maps]
       (swap! index assoc :updates (inc (:updates @index)))
       (.addDocument writer (map->document m))))
@@ -161,11 +163,13 @@
   "Search the supplied index with a query string."
   ([index query max-results]
      (if *content*
-       (search index query max-results :_content)
+       (search index query max-results *analyzer* :_content)
        (throw (Exception. "No default search field specified"))))
-  ([index query max-results default-field]
+  ([index query max-results analyzer]
+     (search index query max-results analyzer :_content))
+  ([index query max-results analyzer default-field]
     (with-open [searcher (IndexSearcher. (:index @index))]
-      (let [parser (QueryParser. *version* (as-str default-field) *analyzer*)
+      (let [parser (QueryParser. *version* (as-str default-field) analyzer)
             query  (.parse parser query)
             hits   (.search searcher query max-results)]
         (doall
@@ -177,11 +181,13 @@
 of the results."
   ([index query]
      (if *content*
-       (search-and-delete index query :_content)
+       (search-and-delete index query *analyzer* :_content)
        (throw (Exception. "No default search field specified"))))
-  ([index query default-field]
+  ([index query analyzer]
+     (search-and-delete index query analyzer :_content))
+  ([index query analyzer default-field]
     (with-open [writer (index-writer index)]
-      (let [parser (QueryParser. *version* (as-str default-field) *analyzer*)
+      (let [parser (QueryParser. *version* (as-str default-field) analyzer)
             query  (.parse parser query)]
         (.deleteDocuments writer query)
         (swap! index assoc :updates (inc (:updates @index)))))
@@ -194,8 +200,6 @@ of the results."
   [index n]
   (with-open [reader (index-reader index)]
     (document->map (.document reader n))))
-
-;; utils ;;
 
 (defn analyze
   "Breaks text into list of terms using specified anayzer"
@@ -227,15 +231,15 @@ of the results."
   [index]
   (with-open [reader (index-reader index)]
     (let [num-docs (.numDocs reader)]
-      (loop [i num-docs, ret (list)]
-	(if (= i 0)
+      (loop [i (- num-docs 1), ret (list)]
+	(if (< i 0)
 	  ret
 	  (if (.isDeleted reader i)
 	    (recur (- i 1) ret)
 	    (recur (- i 1) (conj ret i))))))))
 
 (defn all-words
-  "Returns list of all words."
+  "Returns list of all words in index."
   [index]
   (with-open [reader (index-reader index)]
     (let [terms (.terms reader)]
@@ -244,6 +248,15 @@ of the results."
 	  (recur (conj! ret (.text (.term terms))))
 	  (seq (persistent! ret)))))))
 
+(defn document-words
+  "Returns list of all words in document n by analyzing it's :_content field. "
+  ([index n] (document-words index n *analyzer*))
+  ([index n analyzer]
+     (with-open [reader (index-reader index)]
+       (analyze (.stringValue (.getField (.document reader n) "_content"))
+		analyzer))))
+
+
 (defn detect-lang
   "Tries to guess the language the text is written in.
    Result - 2-character language code (e.g. 'en', 'fr', etc.)"
@@ -251,10 +264,32 @@ of the results."
   (let [idf (LanguageIdentifier. text)]
     (.getLanguage idf)))
 
+
+(def full-lang-names
+     {"en" "English"
+      "fr" "French"
+      "de" "German"
+      "it" "Italian"
+      "ee" "Spanish"
+      "hu" "Hungarian"
+      "ru" "Russian"
+      "cz" "Czech"
+      "pl" "Polish"})
+
+(defn auto-analyzer
+  "Detects language and selects appropriate analyzer"
+  [text]
+  (let [code (detect-lang text)
+	full-name (full-lang-names code)]
+    (if full-name
+      (snowball-analyzer full-name)
+      (throw (Exception. (str "No full name for language code: " code))))))
+
+
 ;; test data ;;
 
 (defn init-tests []
   (def idx (memory-index))
-  (add idx {:title "William Shakespeare: Dream in a Summer Night"})
-  (add idx {:title "Progmatic bookshelf: Programming Clojure"})
-  (add idx {:title "Science of a Dream"}))
+  (add idx *analyzer* {:title "William Shakespeare: Dream in a Summer Night"})
+  (add idx *analyzer* {:title "Progmatic bookshelf: Programming Clojure"})
+  (add idx *analyzer* {:title "Science of a Dream"}))
