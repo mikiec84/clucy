@@ -30,7 +30,7 @@
   (SnowballAnalyzer. *version* lang))
 (defn shingle-analyzer-wrapper [analyzer max-shingle-size]
   (ShingleAnalyzerWrapper. analyzer max-shingle-size))
-(def *analyzer* (shingle-analyzer-wrapper (snowball-analyzer "English") 5))
+(def *analyzer* (shingle-analyzer-wrapper (snowball-analyzer "English") 3))
 (def *optimize-frequency* 1000)
 
 (defstruct

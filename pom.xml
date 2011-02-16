@@ -3,14 +3,14 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>clinch</groupId>
   <artifactId>clucy</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.2</version>
   <name>clucy</name>
   <description>A Clojure interface to the Lucene search engine</description>
   <url>http://github/faithlessfriend/clucy</url>
   <scm>
     <connection>scm:git:git://github.com/faithlessfriend/clucy.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/faithlessfriend/clucy.git</developerConnection>
-    <tag>df711263bc651bc1fed420571f08c3d55e7d4c22</tag>
+    <tag>989311139e7af6717874b15b926a894db8eab5d5</tag>
     <url>http://github.com/faithlessfriend/clucy</url>
   </scm>
   <build>
@@ -59,12 +59,17 @@
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>
-      <version>3.0.1</version>
+      <version>3.0.3</version>
     </dependency>
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-snowball</artifactId>
-      <version>3.0.1</version>
+      <version>3.0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analyzers</artifactId>
+      <version>3.0.3</version>
     </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>

@@ -1,4 +1,4 @@
-(defproject clinch/clucy "0.1.2"
+(defproject clinch/clucy "0.1.3"
   :description "A Clojure interface to the Lucene search engine"
   :url "http://github/faithlessfriend/clucy"
   :dependencies [[org.clojure/clojure "1.2.0"]
