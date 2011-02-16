@@ -7,12 +7,13 @@
            (org.apache.lucene.index IndexWriter IndexWriter$MaxFieldLength
 				    IndexReader)
 	   org.apache.tika.language.LanguageIdentifier
-           ;;org.apache.lucene.analysis.standard.StandardAnalyzer
 	   org.apache.lucene.analysis.snowball.SnowballAnalyzer
 	   org.apache.lucene.analysis.tokenattributes.TermAttribute
 	   org.apache.lucene.analysis.tokenattributes.TermAttributeImpl
 	   org.apache.lucene.analysis.tokenattributes.TypeAttribute
 	   org.apache.lucene.analysis.tokenattributes.TypeAttributeImpl
+	   org.apache.lucene.analysis.TokenFilter
+	   org.apache.lucene.analysis.shingle.ShingleAnalyzerWrapper
            org.apache.lucene.queryParser.QueryParser
            org.apache.lucene.search.IndexSearcher
            (org.apache.lucene.store RAMDirectory NIOFSDirectory)
@@ -25,9 +26,12 @@
 
 (def *version*  Version/LUCENE_30)
 ;;(def *analyzer* (StandardAnalyzer. *version*))
-(defn snowball-analyzer [lang] (SnowballAnalyzer. *version* lang))
-(def *analyzer* (snowball-analyzer "English"))
-(def *optimize-frequency* 1)
+(defn snowball-analyzer [lang]
+  (SnowballAnalyzer. *version* lang))
+(defn shingle-analyzer-wrapper [analyzer max-shingle-size]
+  (ShingleAnalyzerWrapper. analyzer max-shingle-size))
+(def *analyzer* (shingle-analyzer-wrapper (snowball-analyzer "English") 5))
+(def *optimize-frequency* 1000)
 
 (defstruct
     #^{:doc "Structure for clucy indexes."}
@@ -286,10 +290,4 @@ of the results."
       (throw (Exception. (str "No full name for language code: " code))))))
 
 
-;; test data ;;
 
-(defn init-tests []
-  (def idx (memory-index))
-  (add idx *analyzer* {:title "William Shakespeare: Dream in a Summer Night"})
-  (add idx *analyzer* {:title "Progmatic bookshelf: Programming Clojure"})
-  (add idx *analyzer* {:title "Science of a Dream"}))
